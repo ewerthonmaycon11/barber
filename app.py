@@ -1,5 +1,4 @@
 import os
-
 from datetime import datetime, timedelta
 from flask import Flask, flash, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
@@ -14,19 +13,9 @@ from flask_login import (
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-# --- CONFIGURAÇÃO INTELIGENTE DO BANCO DE DADOS ---
-database_url = os.environ.get('DATABASE_URL')
-if database_url:
-  # Corrige o prefixo e força o uso do driver psycopg2
-  if database_url.startswith('postgres://'):
-    database_url = database_url.replace('postgres://', 'postgresql+psycopg2://', 1)
-  elif database_url.startswith('postgresql://'):
-    database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
-    
-  app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-else:
-  # Caso esteja a rodar no seu computador local (SQLite)
-  app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///onbarber.db'
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'onbarber-secret-key-futurista-2026'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///onbarber.db'
 
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
