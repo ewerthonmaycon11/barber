@@ -15,19 +15,21 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'onbarber-secret-key-futurista-2026'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///onbarber.db'
 
-UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+# --- CONFIGURAÇÃO OBRIGATÓRIA DA NEON NO RENDER ---
+database_url = os.environ.get('DATABASE_URL')
 
-db = SQLAlchemy()
-db.init_app(app)
+if database_url:
+  if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+  elif database_url.startswith('postgresql://'):
+    database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+  app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+  # Apenas para o seu PC local
+  app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///onbarber.db'
 
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
 def save_uploaded_file(file, prefix='file'):
