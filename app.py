@@ -14,15 +14,15 @@ from flask_login import (
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'onbarber-secret-key-futurista-2026'
-
 # --- CONFIGURAÇÃO INTELIGENTE DO BANCO DE DADOS ---
 database_url = os.environ.get('DATABASE_URL')
 if database_url:
-  # Corrige o prefixo caso a Neon forneça 'postgres://' em vez de 'postgresql://'
+  # Corrige o prefixo e força o uso do driver psycopg2
   if database_url.startswith('postgres://'):
-    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    database_url = database_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+  elif database_url.startswith('postgresql://'):
+    database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+    
   app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 else:
   # Caso esteja a rodar no seu computador local (SQLite)
