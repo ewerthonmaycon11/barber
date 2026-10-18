@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'onbarber-secret-key-futurista-2026'
 
-# --- CONFIGURAÇÃO OBRIGATÓRIA DA NEON NO RENDER ---
+# --- 1. CONFIGURAÇÃO DO BANCO DE DADOS ---
 database_url = os.environ.get('DATABASE_URL')
 
 if database_url:
@@ -26,10 +26,22 @@ if database_url:
     database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
   app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 else:
-  # Apenas para o seu PC local
   app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///onbarber.db'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+# --- 2. INICIALIZAÇÃO DO DB E LOGIN (DEVEM VIR ANTES DOS MODELOS) ---
+db = SQLAlchemy()
+db.init_app(app)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 
 def save_uploaded_file(file, prefix='file'):
@@ -45,6 +57,8 @@ def save_uploaded_file(file, prefix='file'):
   file.save(filepath)
   return url_for('static', filename=f'uploads/{filename}')
 
+
+# --- 3. AGORA SIM, OS MODELOS (User, Barbershop, etc.) ---
 
 # --- CONFIGURAÇÃO DE TEMAS E FUNDOS ---
 THEMES = [
