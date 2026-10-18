@@ -16,7 +16,17 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'onbarber-secret-key-futurista-2026'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///onbarber.db'
+
+# --- CONFIGURAÇÃO INTELIGENTE DO BANCO DE DADOS ---
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+  # Corrige o prefixo caso a Neon forneça 'postgres://' em vez de 'postgresql://'
+  if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+  app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+  # Caso esteja a rodar no seu computador local (SQLite)
+  app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///onbarber.db'
 
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
