@@ -13,12 +13,12 @@ from flask_login import (
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+# 1. PRIMEIRO cria-se a aplicação app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'onbarber-secret-key-futurista-2026'
 
-# --- 1. CONFIGURAÇÃO DO BANCO DE DADOS ---
+# 2. DEPOIS configura-se o banco de dados usando o app já criado
 database_url = os.environ.get('DATABASE_URL')
-
 if database_url:
   if database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql+psycopg2://', 1)
@@ -28,37 +28,62 @@ if database_url:
 else:
   app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///onbarber.db'
 
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# --- 2. INICIALIZAÇÃO DO DB E LOGIN (DEVEM VIR ANTES DOS MODELOS) ---
 db = SQLAlchemy()
-db.init_app(app)
+db.init_app(app) # <-- O init_app vem ANTES do app_context
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+with app.app_context():
+    db.create_all()
+    # Adiciona colunas manualmente na Neon caso a tabela já exista sem elas
+    with db.engine.connect() as conn:
+        import sqlalchemy as sa
+        inspector = sa.inspect(db.engine)
+        
+        # Verifica colunas da tabela User
+        user_columns = [col['name'] for col in inspector.get_columns('user')]
+        if 'is_vip' not in user_columns:
+            conn.execute(sa.text('ALTER TABLE "user" ADD COLUMN is_vip BOOLEAN DEFAULT FALSE;'))
+            conn.commit()
+        if 'plan_id' not in user_columns:
+            conn.execute(sa.text('ALTER TABLE "user" ADD COLUMN plan_id INTEGER;'))
+            conn.commit()
+            
+        # Verifica colunas da tabela Barbershop
+        if inspector.has_table('barbershop'):
+            shop_columns = [col['name'] for col in inspector.get_columns('barbershop')]
+            if 'available_times' not in shop_columns:
+                conn.execute(sa.text("ALTER TABLE barbershop ADD COLUMN available_times TEXT DEFAULT '09:00,10:00,11:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00';"))
+                conn.commit()
+
+import base64
 
 def save_uploaded_file(file, prefix='file'):
-  if not file or file.filename == '':
-    return None
-  os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-  ext = os.path.splitext(file.filename)[1].lower()
-  if not ext:
-    ext = '.jpg'
-  timestamp = int(datetime.now().timestamp())
-  filename = f'{prefix}_{timestamp}{ext}'
-  filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-  file.save(filepath)
-  return url_for('static', filename=f'uploads/{filename}')
-
-
-# --- 3. AGORA SIM, OS MODELOS (User, Barbershop, etc.) ---
+    if not file or file.filename == '':
+        return None
+    try:
+        # Lê os bytes da imagem e converte para Data URI Base64
+        file_bytes = file.read()
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext == '.png':
+            mime = 'image/png'
+        elif ext in ['.webp']:
+            mime = 'image/webp'
+        else:
+            mime = 'image/jpeg'
+            
+        encoded = base64.b64encode(file_bytes).decode('utf-8')
+        return f"data:{mime};base64,{encoded}"
+    except Exception as e:
+        print(f"Erro ao converter imagem: {e}")
+        return None
 
 # --- CONFIGURAÇÃO DE TEMAS E FUNDOS ---
 THEMES = [
@@ -132,51 +157,67 @@ BACKGROUNDS = {
     },
 }
 
+DEFAULT_TIMES = [
+    '09:00',
+    '10:00',
+    '11:00',
+    '13:00',
+    '14:00',
+    '15:00',
+    '16:00',
+    '17:00',
+    '18:00',
+    '19:00',
+]
 
 # --- MODELOS ---
+
+
 class User(UserMixin, db.Model):
-  id = db.Column(db.Integer, primary_key=True)
-  name = db.Column(db.String(100), nullable=False)
-  email = db.Column(db.String(100), unique=True, nullable=False)
-  password = db.Column(db.String(200), nullable=False)
-  role = db.Column(db.String(20), nullable=False)
-  balance = db.Column(db.Float, default=0.0)
-  points = db.Column(db.Integer, default=0)
-  bio = db.Column(
-      db.Text, default='Profissional focado em proporcionar a melhor experiência.'
-  )
-  theme_id = db.Column(db.String(30), default='emerald')
-  bg_id = db.Column(db.String(30), default='preto')
-  avatar_url = db.Column(
-      db.String(300),
-      default='https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-  )
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.String(20), nullable=False)
+    balance = db.Column(db.Float, default=0.0)
+    points = db.Column(db.Integer, default=0)
+    bio = db.Column(
+        db.Text, default='Profissional focado em proporcionar a melhor experiência.'
+    )
+    theme_id = db.Column(db.String(30), default='emerald')
+    bg_id = db.Column(db.String(30), default='preto')
+    avatar_url = db.Column(
+        db.String(300),
+        default='https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+    )
+    is_vip = db.Column(db.Boolean, default=False)
+    plan_id = db.Column(db.Integer, db.ForeignKey('plan_config.id'), nullable=True)
+    plan = db.relationship('PlanConfig', backref='vip_users')
 
-  barbershop = db.relationship(
-      'Barbershop', backref='owner', uselist=False, cascade='all, delete'
-  )
-  appointments_as_client = db.relationship(
-      'Appointment', foreign_keys='Appointment.client_id', backref='client'
-  )
-  appointments_as_barber = db.relationship(
-      'Appointment', foreign_keys='Appointment.barber_id', backref='barber'
-  )
-  deposits = db.relationship(
-      'DepositRequest', backref='client', cascade='all, delete'
-  )
-
+    barbershop = db.relationship(
+        'Barbershop', backref='owner', uselist=False, cascade='all, delete'
+    )
+    appointments_as_client = db.relationship(
+        'Appointment', foreign_keys='Appointment.client_id', backref='client'
+    )
+    appointments_as_barber = db.relationship(
+        'Appointment', foreign_keys='Appointment.barber_id', backref='barber'
+    )
+    deposits = db.relationship(
+        'DepositRequest', backref='client', cascade='all, delete'
+    )
 
 class Barbershop(db.Model):
-  id = db.Column(db.Integer, primary_key=True)
-  name = db.Column(db.String(100), nullable=False)
-  image_url = db.Column(
-      db.String(300),
-      default='https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&q=80&w=400',
-  )
-  theme_id = db.Column(db.String(30), default='emerald')
-  bg_id = db.Column(db.String(30), default='preto')
-  barber_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    image_url = db.Column(
+        db.String(300),
+        default='https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&q=80&w=400',
+    )
+    theme_id = db.Column(db.String(30), default='emerald')
+    bg_id = db.Column(db.String(30), default='preto')
+    barber_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    available_times = db.Column(db.Text, default='09:00,10:00,11:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00')
 
 class AdminSettings(db.Model):
   id = db.Column(db.Integer, primary_key=True)
@@ -268,9 +309,8 @@ def inject_theme():
     if current_user.role == 'barber' and current_user.barbershop:
       shop_name = current_user.barbershop.name
     elif current_user.role == 'client':
-      shop = Barbershop.query.first()
-      if shop:
-        shop_name = shop.name
+      # Se for cliente, exibe o nome do próprio cliente (ou o nome do sistema)
+      shop_name = current_user.name
 
   admin_settings = AdminSettings.query.first()
   global_pix = admin_settings.pix_qrcode_url if admin_settings else None
@@ -529,18 +569,12 @@ def barber_agendamentos():
   if current_user.role != 'barber':
     return redirect(url_for('index'))
   selected_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-  all_times = [
-      '09:00',
-      '10:00',
-      '11:00',
-      '13:00',
-      '14:00',
-      '15:00',
-      '16:00',
-      '17:00',
-      '18:00',
-      '19:00',
-  ]
+  
+  # Puxa os horários personalizados salvos na barbearia do barbeiro logado
+  all_times = DEFAULT_TIMES
+  if current_user.barbershop and current_user.barbershop.available_times:
+    all_times = [t.strip() for t in current_user.barbershop.available_times.split(',') if t.strip()]
+
   booked = (
       Appointment.query.filter_by(barber_id=current_user.id, date=selected_date)
       .filter(Appointment.status.in_(['Confirmado', 'Concluído']))
@@ -658,6 +692,7 @@ def barber_perfil():
   return render_template(
       'barber_perfil.html', themes=THEMES, backgrounds=BACKGROUNDS
   )
+
 
 
 # --- PAINEL DO CLIENTE ---
@@ -839,17 +874,95 @@ def logout():
   return redirect(url_for('login'))
 
 
-with app.app_context():
-  db.create_all()
-  if not User.query.filter_by(email='admin@onbarber.com').first():
-    admin = User(
-        name='Valdiney França',
-        email='admin@onbarber.com',
-        password=generate_password_hash('123456'),
-        role='admin',
-    )
-    db.session.add(admin)
-    db.session.commit()
+# --- ÁREA VIP DO CLIENTE ---
+@app.route('/client/vip', methods=['GET', 'POST'])
+@login_required
+def client_vip():
+    if current_user.role != 'client':
+        return redirect(url_for('index'))
+    
+    plans = PlanConfig.query.all()
+    return render_template('client_vip.html', plans=plans)
+
+@app.route('/client/subscribe-plan/<int:plan_id>', methods=['POST'])
+@login_required
+def subscribe_plan(plan_id):
+    if current_user.role != 'client':
+        return redirect(url_for('index'))
+    
+    plan = PlanConfig.query.get_or_404(plan_id)
+    # Extrai o valor do plano (ex: "R$ 49,90" -> 49.90)
+    try:
+        price_val = float(plan.price_text.replace('R$', '').replace('.', '').replace(',', '.').split('/')[0].strip())
+    except:
+        price_val = 49.90
+
+    if current_user.balance >= price_val:
+        current_user.balance -= price_val
+        current_user.is_vip = True
+        current_user.plan_id = plan.id
+        db.session.commit()
+        flash(f'Parabéns! Você assinou o {plan.title} e agora é um Membro VIP!', 'success')
+    else:
+        flash('Saldo insuficiente para assinar este plano. Faça um depósito via PIX primeiro!', 'error')
+        
+    return redirect(url_for('client_vip'))
+
+
+
+# --- GERENCIAR HORÁRIOS DO BARBEIRO ---
+@app.route('/barber/manage-times', methods=['POST'])
+@login_required
+def manage_barber_times():
+    if current_user.role != 'barber':
+        return redirect(url_for('index'))
+    
+    action = request.form.get('action') # 'add', 'remove', ou 'edit'
+    time_slot = request.form.get('time_slot')
+    old_time = request.form.get('old_time')
+    new_time = request.form.get('new_time')
+
+    shop = current_user.barbershop
+    if shop:
+        if not shop.available_times:
+            shop.available_times = ','.join(DEFAULT_TIMES)
+            
+        current_list = [t.strip() for t in shop.available_times.split(',') if t.strip()]
+        
+        if action == 'add' and time_slot:
+            if time_slot not in current_list:
+                current_list.append(time_slot)
+                current_list.sort()
+                shop.available_times = ','.join(current_list)
+                db.session.commit()
+                flash(f'Horário {time_slot} adicionado à sua grade!', 'success')
+        elif action == 'remove' and time_slot:
+            if time_slot in current_list:
+                current_list.remove(time_slot)
+                shop.available_times = ','.join(current_list)
+                db.session.commit()
+                flash(f'Horário {time_slot} removido da sua grade!', 'success')
+        elif action == 'edit' and old_time and new_time:
+            if old_time in current_list:
+                idx = current_list.index(old_time)
+                current_list[idx] = new_time
+                current_list.sort()
+                shop.available_times = ','.join(current_list)
+                db.session.commit()
+                flash(f'Horário {old_time} alterado para {new_time} com sucesso!', 'success')
+            
+    return redirect(url_for('barber_agendamentos'))
 
 if __name__ == '__main__':
+  with app.app_context():
+    db.create_all()
+    if not User.query.filter_by(email='admin@onbarber.com').first():
+      admin = User(
+          name='Valdiney França',
+          email='admin@onbarber.com',
+          password=generate_password_hash('123456'),
+          role='admin',
+      )
+      db.session.add(admin)
+      db.session.commit()
   app.run(debug=True, port=5000)
