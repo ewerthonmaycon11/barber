@@ -1,0 +1,103 @@
+{% extends "base_app.html" %}
+{% set active_tab = 'vip' %}
+{% block main_content %}
+<div class="space-y-6 max-w-4xl mx-auto">
+
+    <!-- Cabeçalho Área VIP -->
+    <div class="{{ bg_style.card_bg }} p-6 rounded-2xl border border-amber-500/30 shadow-2xl relative overflow-hidden">
+        <div class="absolute -right-6 -bottom-6 opacity-10 text-amber-500 text-9xl pointer-events-none">
+            <i class="fa-solid fa-crown"></i>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-2xl shadow-lg">
+                <i class="fa-solid fa-crown"></i>
+            </div>
+            <div>
+                <h2 class="text-2xl font-bold text-amber-400 flex items-center gap-2">
+                    Área VIP OnBarber
+                </h2>
+                <p class="text-xs opacity-70">Acesso exclusivo a benefícios, descontos em serviços e prioridade na agenda.</p>
+            </div>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="p-4 text-sm rounded-xl border {{ 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' if category == 'success' else 'bg-red-500/20 border-red-500/30 text-red-300' }}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if current_user.is_vip %}
+    <!-- CONTEÚDO LIBERADO PARA QUEM É VIP -->
+    <div class="{{ bg_style.card_bg }} p-6 rounded-2xl border border-emerald-500/30 space-y-6">
+        <div class="flex items-center justify-between border-b border-white/10 pb-4">
+            <div>
+                <span class="text-xs uppercase tracking-wider text-amber-400 font-bold">Status da Assinatura</span>
+                <h3 class="text-lg font-bold">Membro VIP Ativo 🎉</h3>
+            </div>
+            <span class="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-full">
+                <i class="fa-solid fa-crown mr-1"></i> {{ current_user.plan.title if current_user.plan else 'Plano VIP' }}
+            </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="p-4 bg-black/20 rounded-xl border border-white/5 space-y-2">
+                <i class="fa-solid fa-bolt text-amber-400 text-xl"></i>
+                <h4 class="font-bold text-sm">Pontos em Dobro</h4>
+                <p class="text-xs opacity-70">Ganhe 2x mais pontos de fidelidade em qualquer agendamento realizado.</p>
+            </div>
+            <div class="p-4 bg-black/20 rounded-xl border border-white/5 space-y-2">
+                <i class="fa-solid fa-calendar-star text-amber-400 text-xl"></i>
+                <h4 class="font-bold text-sm">Reserva Prioritária</h4>
+                <p class="text-xs opacity-70">Acesso a horários exclusivos e cancelamento sem taxa adicional.</p>
+            </div>
+            <div class="p-4 bg-black/20 rounded-xl border border-white/5 space-y-2">
+                <i class="fa-solid fa-scissors text-amber-400 text-xl"></i>
+                <h4 class="font-bold text-sm">Desconto em Produtos</h4>
+                <p class="text-xs opacity-70">Apresente seu selo VIP na barbearia e ganhe descontos em pomadas e cuidados.</p>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- SELEÇÃO DE PLANOS PARA QUEM AINDA NÃO É VIP -->
+    <div class="space-y-4">
+        <h3 class="text-lg font-bold">Escolha um Plano para Liberar a Área VIP</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for plan in plans %}
+            <div class="{{ bg_style.card_bg }} p-6 rounded-2xl border border-white/10 hover:border-amber-500/50 transition-all flex flex-col justify-between space-y-4">
+                <div>
+                    <div class="flex justify-between items-start">
+                        <h4 class="text-xl font-bold text-amber-400">{{ plan.title }}</h4>
+                        <i class="fa-solid fa-crown text-amber-400"></i>
+                    </div>
+                    <p class="text-2xl font-extrabold my-2">{{ plan.price_text }}</p>
+                    <p class="text-xs opacity-70 mb-4">{{ plan.description }}</p>
+                    
+                    <ul class="text-xs space-y-2 opacity-90 border-t border-white/10 pt-4">
+                        {% for feature in plan.features.split('\n') %}
+                        <li class="flex items-center gap-2">
+                            <i class="fa-solid fa-check text-emerald-400"></i> {{ feature }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <form method="POST" action="{{ url_for('subscribe_plan', plan_id=plan.id) }}">
+                    <button type="submit" class="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-black font-extrabold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-crown"></i> ASSINAR COM SALDO
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
