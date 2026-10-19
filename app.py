@@ -186,12 +186,19 @@ class User(UserMixin, db.Model):
     )
     theme_id = db.Column(db.String(30), default='emerald')
     bg_id = db.Column(db.String(30), default='preto')
+    
+    # Alterado de db.String(300) para db.Text para suportar fotos em Base64 sem truncar
     avatar_url = db.Column(
-        db.String(300),
+        db.Text,
         default='https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
     )
+    
     is_vip = db.Column(db.Boolean, default=False)
     plan_id = db.Column(db.Integer, db.ForeignKey('plan_config.id'), nullable=True)
+    
+    # Campo novo para aprovação de barbeiros pelo admin geral (Clientes entram como True, Barbeiros como False)
+    is_approved = db.Column(db.Boolean, default=True)
+
     plan = db.relationship('PlanConfig', backref='vip_users')
 
     barbershop = db.relationship(
@@ -348,16 +355,26 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-  if request.method == 'POST':
-    email = request.form.get('email')
-    password = request.form.get('password')
-    user = User.query.filter_by(email=email).first()
-    if user and check_password_hash(user.password, password):
-      login_user(user)
-      return redirect(url_for('index'))
-    flash('E-mail ou senha incorretos!', 'error')
-  return render_template('login.html')
-
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(email=email).first()
+        
+        if user and check_password_hash(user.password, password):
+            if user.role == 'barber' and not user.is_approved:
+                flash('A sua conta de barbeiro ainda está pendente de aprovação pelo Administrador.', 'warning')
+                return redirect(url_for('login'))
+                
+            login_user(user)
+            if user.role == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            elif user.role == 'barber':
+                return redirect(url_for('barber_agendamentos'))
+            else:
+                return redirect(url_for('client_dashboard'))
+        else:
+            flash('Email ou senha inválidos.', 'danger')
+    return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -381,6 +398,9 @@ def register():
       if uploaded_url:
         avatar_url = uploaded_url
 
+    # Barbeiros precisam de aprovação (is_approved=False), Clientes entram direto (True)
+    is_approved_status = True if role == 'client' else False
+
     new_user = User(
         name=name,
         email=email,
@@ -389,18 +409,62 @@ def register():
         theme_id=theme_id,
         bg_id=bg_id,
         avatar_url=avatar_url,
+        is_approved=is_approved_status,
     )
     db.session.add(new_user)
     db.session.commit()
-    login_user(new_user)
 
+    # Se for barbeiro, não loga automaticamente e avisa sobre a aprovação pendente
     if role == 'barber':
-      return redirect(url_for('add_barbershop'))
+      flash('Conta de barbeiro criada com sucesso! Aguarde a aprovação do Administrador Geral.', 'success')
+      return redirect(url_for('login'))
+
+    # Se for cliente, faz login e direciona para o dashboard
+    login_user(new_user)
     return redirect(url_for('client_dashboard'))
 
   return render_template(
       'register.html', themes=THEMES, backgrounds=BACKGROUNDS
   )
+
+
+@app.route('/profile/update-avatar', methods=['POST'])
+@login_required
+def update_avatar():
+    file = request.files.get('avatar')
+    if file and file.filename != '':
+        base64_img = save_uploaded_file(file, prefix='avatar')
+        if base64_img:
+            current_user.avatar_url = base64_img
+            db.session.commit()
+            flash('Foto de perfil atualizada com sucesso!', 'success')
+    return redirect(url_for('barber_perfil') if current_user.role == 'barber' else url_for('client_dashboard'))
+
+
+
+@app.route('/admin/approve-barber/<int:user_id>')
+@login_required
+def approve_barber(user_id):
+    if current_user.role != 'admin':
+        return redirect(url_for('index'))
+    barber = User.query.get_or_404(user_id)
+    if barber.role == 'barber':
+        barber.is_approved = True
+        db.session.commit()
+        flash(f'Barbeiro {barber.name} aprovado com sucesso!', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/delete-user/<int:user_id>')
+@login_required
+def delete_user(user_id):
+    if current_user.role != 'admin':
+        return redirect(url_for('index'))
+    user = User.query.get_or_404(user_id)
+    if user.role != 'admin': # Impede excluir o admin principal por segurança
+        db.session.delete(user)
+        db.session.commit()
+        flash('Utilizador/Barbearia excluído com sucesso!', 'success')
+    return redirect(url_for('admin_dashboard'))
 
 
 @app.route('/add-barbershop', methods=['GET', 'POST'])
