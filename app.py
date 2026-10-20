@@ -529,7 +529,8 @@ def admin_dashboard():
         flash('QR Code geral do Admin atualizado com sucesso!', 'success')
         return redirect(url_for('admin_dashboard'))
 
-  barbers = User.query.filter_by(role='barber').all()
+  barbers = User.query.filter_by(role='barber', is_approved=True).all()
+  pending_barbers = User.query.filter_by(role='barber', is_approved=False).all()
   clients = User.query.filter_by(role='client').all()
   appointments = Appointment.query.all()
   pending_deposits = DepositRequest.query.filter_by(status='Pendente').all()
@@ -540,6 +541,7 @@ def admin_dashboard():
   return render_template(
       'admin_dashboard.html',
       barbers=barbers,
+      pending_barbers=pending_barbers,
       clients=clients,
       appointments=appointments,
       pending_deposits=pending_deposits,
