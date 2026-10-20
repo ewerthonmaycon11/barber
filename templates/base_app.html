@@ -60,6 +60,15 @@
                         <a href="{{ url_for('shared_planos') }}" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition-all {% if active_tab == 'planos' %} bg-white/10 {{ theme.text }} {% else %} opacity-70 hover:opacity-100 hover:bg-white/5 {% endif %}">
                             <i class="fa-solid fa-gem"></i> <span>Planos Disponíveis</span>
                         </a>
+                        <a href="{{ url_for('client_vip') }}" class="w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium transition-all {% if active_tab == 'vip' %} bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30 {% else %} opacity-70 hover:opacity-100 hover:bg-white/5 {% endif %}">
+                            <div class="flex items-center space-x-3">
+                                <i class="fa-solid fa-crown text-amber-400"></i>
+                                <span>Área VIP</span>
+                            </div>
+                            {% if current_user.is_vip %}
+                            <span class="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/40">VIP</span>
+                            {% endif %}
+                        </a>
                         <a href="{{ url_for('client_perfil') }}" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition-all {% if active_tab == 'perfil' %} bg-white/10 {{ theme.text }} {% else %} opacity-70 hover:opacity-100 hover:bg-white/5 {% endif %}">
                             <i class="fa-solid fa-user"></i> <span>Meu Perfil</span>
                         </a>

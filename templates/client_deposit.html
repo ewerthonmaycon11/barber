@@ -1,7 +1,7 @@
 {% extends "base_app.html" %}
 {% set active_tab = 'deposito' %}
 {% block main_content %}
-<div class="space-y-6" x-data="{ loading: false, showQr: false }">
+<div class="space-y-6" x-data="{ loading: false, showQr: false, depositAmount: '' }">
     <div class="{{ bg_style.card_bg }} p-6 rounded-2xl border border-white/5 shadow-2xl space-y-6 max-w-xl mx-auto">
         <div>
             <h2 class="text-xl font-bold {{ theme.text }} flex items-center gap-2">
@@ -20,10 +20,11 @@
           {% endif %}
         {% endwith %}
 
-        <form method="POST" @submit.prevent="loading = true; showQr = false; setTimeout(() => { loading = false; showQr = true; }, 2000)" class="space-y-4">
+        <!-- Etapa 1: Digitar o valor e simular geração de QR Code -->
+        <form @submit.prevent="if(depositAmount && depositAmount >= 5){ loading = true; showQr = false; setTimeout(() => { loading = false; showQr = true; }, 1500) }" class="space-y-4">
             <div>
                 <label class="block text-xs uppercase opacity-70 font-semibold mb-1">Valor do Depósito (R$)</label>
-                <input type="number" step="0.01" min="5" name="amount" required placeholder="Ex: 50.00" class="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl">
+                <input type="number" step="0.01" min="5" x-model="depositAmount" required placeholder="Ex: 50.00" class="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl">
             </div>
 
             <!-- Botão Gerar Código -->
@@ -36,22 +37,26 @@
             </button>
         </form>
 
-        <!-- Animação / Resultado do QR Code do Admin -->
+        <!-- Animação / Carregamento -->
         <div x-show="loading" class="text-center py-6 space-y-2" x-cloak>
             <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-500 border-t-transparent"></div>
             <p class="text-xs opacity-70">A gerar o seu QR Code seguro...</p>
         </div>
 
+        <!-- Etapa 2: Exibição do QR Code e envio final com o valor exato -->
         <div x-show="showQr" class="p-4 bg-black/20 border {{ theme.border }} rounded-2xl text-center space-y-3" x-cloak>
-            <p class="text-xs {{ theme.text }} font-bold">Escaneie o QR Code oficial da conta geral:</p>
+            <p class="text-xs {{ theme.text }} font-bold">
+                Escaneie o QR Code oficial para depositar <span class="text-white font-extrabold" x-text="'R$ ' + parseFloat(depositAmount || 0).toFixed(2)"></span>:
+            </p>
             {% if global_pix %}
             <img src="{{ global_pix }}" class="w-48 h-48 object-contain mx-auto rounded-xl border-2 border-emerald-500 shadow-xl bg-white p-2">
             {% else %}
             <p class="text-xs text-red-400">Nenhum QR Code configurado pelo Administrador.</p>
             {% endif %}
 
+            <!-- Formulário REAL de envio para o Flask -->
             <form method="POST" class="pt-4">
-                <input type="hidden" name="amount" value="50"> <!-- Ajustável via input anterior se necessário -->
+                <input type="hidden" name="amount" :value="depositAmount">
                 <button type="submit" class="w-full py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl transition-all">
                     JÁ FIZ O PIX - ENVIAR PARA APROVAÇÃO
                 </button>
@@ -71,6 +76,8 @@
                         {{ dep.status }}
                     </span>
                 </div>
+                {% else %}
+                <p class="text-xs opacity-50 text-center py-2">Nenhum depósito solicitado até ao momento.</p>
                 {% endfor %}
             </div>
         </div>

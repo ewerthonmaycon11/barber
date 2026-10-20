@@ -1,7 +1,7 @@
 {% extends "base_app.html" %}
 {% set active_tab = 'agendamentos' %}
 {% block main_content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="{ openEditModal: false, editingTime: null, editTimeValue: '' }">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -18,13 +18,86 @@
                 <h3 class="text-lg font-bold flex items-center gap-2">
                     <i class="fa-solid fa-calendar-check {{ theme.text }}"></i> Seletor de Agenda e Horários
                 </h3>
-                <form method="GET" class="flex items-center gap-2">
-                    <input type="date" name="date" value="{{ selected_date }}" class="px-4 py-2 bg-black/20 border border-white/10 rounded-xl text-sm">
-                    <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold transition-all">Filtrar</button>
-                </form>
+                <div class="flex items-center gap-2">
+                    <button @click="openEditModal = true; editingTime = null;" class="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-xs font-bold rounded-xl transition-all flex items-center gap-2 border border-white/10">
+                        <i class="fa-solid fa-clock-rotate-left"></i> Editar Horários
+                    </button>
+                    <form method="GET" class="flex items-center gap-2">
+                        <input type="date" name="date" value="{{ selected_date }}" class="px-4 py-2 bg-black/20 border border-white/10 rounded-xl text-sm">
+                        <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold transition-all">Filtrar</button>
+                    </form>
+                </div>
             </div>
 
-            <!-- Horários -->
+            <!-- MODAL DE EDIÇÃO E GERENCIAMENTO DE HORÁRIOS -->
+            <div x-show="openEditModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-cloak>
+                <div class="{{ bg_style.card_bg }} p-6 rounded-2xl border border-white/10 max-w-md w-full space-y-4 shadow-2xl" @click.away="openEditModal = false">
+                    <div class="flex justify-between items-center border-b border-white/10 pb-3">
+                        <h3 class="font-bold text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-clock"></i> Gerenciar Grade de Horários
+                        </h3>
+                        <button @click="openEditModal = false" class="text-gray-400 hover:text-white">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+
+                    <!-- Adicionar Horário -->
+                    <form method="POST" action="{{ url_for('manage_barber_times') }}" class="space-y-3">
+                        <input type="hidden" name="action" value="add">
+                        <label class="block text-xs uppercase opacity-70 font-semibold">Adicionar Novo Horário (HH:MM)</label>
+                        <div class="flex gap-2">
+                            <input type="time" name="time_slot" required class="flex-1 px-4 py-2.5 bg-black/20 border border-white/10 rounded-xl text-sm text-white">
+                            <button type="submit" class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-bold text-xs rounded-xl transition-all">
+                                Adicionar
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Lista de Horários Atuais com Opção de Editar ou Excluir -->
+                    <div class="border-t border-white/10 pt-4 space-y-2">
+                        <p class="text-xs opacity-70 mb-2">Horários Atuais na Grade (Clique em Editar ou Lixeira):</p>
+                        <div class="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+                            {% for t in all_times %}
+                            <div class="p-2.5 bg-black/30 border border-white/10 rounded-xl flex items-center justify-between text-xs">
+                                <!-- Modo Normal -->
+                                <template x-if="editingTime !== '{{ t }}'">
+                                    <div class="flex items-center justify-between w-full">
+                                        <span class="font-bold text-sm tracking-wide">{{ t }}</span>
+                                        <div class="flex items-center gap-1.5">
+                                            <button @click="editingTime = '{{ t }}'; editTimeValue = '{{ t }}';" class="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/40 rounded-lg font-semibold flex items-center gap-1 transition-all">
+                                                <i class="fa-solid fa-pen text-[10px]"></i> Editar
+                                            </button>
+                                            <form method="POST" action="{{ url_for('manage_barber_times') }}" class="inline">
+                                                <input type="hidden" name="action" value="remove">
+                                                <input type="hidden" name="time_slot" value="{{ t }}">
+                                                <button type="submit" onclick="return confirm('Remover o horário {{ t }} da agenda?')" class="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 rounded-lg transition-all" title="Remover horário">
+                                                    <i class="fa-solid fa-trash text-[11px]"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Modo de Edição Ativo para este horário -->
+                                <template x-if="editingTime === '{{ t }}'">
+                                    <form method="POST" action="{{ url_for('manage_barber_times') }}" class="flex items-center justify-between w-full gap-2">
+                                        <input type="hidden" name="action" value="edit">
+                                        <input type="hidden" name="old_time" value="{{ t }}">
+                                        <input type="time" name="new_time" x-model="editTimeValue" required class="px-2 py-1 bg-black/50 border border-emerald-500 rounded-lg text-xs text-white">
+                                        <div class="flex items-center gap-1">
+                                            <button type="submit" class="px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg text-[11px]">Salvar</button>
+                                            <button type="button" @click="editingTime = null" class="px-2 py-1 bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg text-[11px]">Cancelar</button>
+                                        </div>
+                                    </form>
+                                </template>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Horários do dia -->
             <div>
                 <h4 class="text-xs uppercase opacity-70 tracking-wider font-semibold mb-3">Horários do dia {{ selected_date }}</h4>
                 <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -98,7 +171,12 @@
                         <span class="w-6 h-6 flex items-center justify-center rounded-full font-black text-xs {{ 'bg-amber-400 text-black' if loop.index == 1 else ('bg-gray-300 text-black' if loop.index == 2 else ('bg-amber-700 text-white' if loop.index == 3 else 'bg-white/10 opacity-70')) }}">
                             {{ loop.index }}
                         </span>
-                        <span class="text-sm font-bold">{{ c.name }}</span>
+                        <span class="text-sm font-bold flex items-center gap-1.5">
+                            {{ c.name }}
+                            {% if c.is_vip %}
+                            <i class="fa-solid fa-crown text-[10px] text-amber-400"></i>
+                            {% endif %}
+                        </span>
                     </div>
                     <span class="text-xs font-bold text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full">{{ c.points }} pts</span>
                 </div>
